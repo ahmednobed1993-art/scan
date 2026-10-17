@@ -93,6 +93,8 @@ input#amt{font-family:"Readex Pro",sans-serif;font-size:24px;text-align:center;f
 .li .a{color:var(--teal);font-variant-numeric:tabular-nums;font-weight:600}
 .li .t{color:var(--faint);font-size:11px}
 .note{color:var(--faint);font-size:11.5px;line-height:1.8;margin-top:14px;text-align:center}
+.evsel{width:100%;background:#111C27;color:var(--text);border:1px solid var(--line);border-radius:11px;padding:13px;font:inherit;font-size:16px}
+.evsel:focus{border-color:var(--amber);outline:none}
 </style>
 </head>
 <body>
@@ -121,6 +123,11 @@ input#amt{font-family:"Readex Pro",sans-serif;font-size:24px;text-align:center;f
   <div class="top">
     <span class="who">المورد: <span class="sup" id="tSup"></span></span>
     <button id="bSwitch">تبديل</button>
+  </div>
+
+  <div class="card">
+    <label for="evt">الفعالية الحالية</label>
+    <select id="evt" class="evsel"></select>
   </div>
 
   <div class="card">
@@ -157,7 +164,7 @@ input#amt{font-family:"Readex Pro",sans-serif;font-size:24px;text-align:center;f
     <div class="log" id="log"></div>
   </div>
 
-  <p class="note">كل تسجيل يُكتب مباشرة في ورقة «المقاعد» داخل ملف Excel على OneDrive.</p>
+  <p class="note">كل تسجيل يُكتب سطراً جديداً في ورقة «سجل المقاعد» مع التاريخ والوقت والفعالية.</p>
 </section>
 
 </div>
@@ -170,12 +177,13 @@ const CFG = {
   redirect : "https://ahmednobed1993-art.github.io/scan/",
   scope    : "openid profile offline_access User.Read Files.ReadWrite.All",
   sheet    : "المقاعد",
+  logSheet : "سجل المقاعد",
   salesSheet:"المبيعات",
-  range    : "A1:N400",
-  colUsed  : "F",              // عمود «المستخدم»
+  setSheet : "الإعدادات",
+  range    : "A1:J1501",
   suppliers: [
-    {name:"مرتضى", url:"https://achievers544-my.sharepoint.com/:x:/r/personal/ahmednajim_achievers544_onmicrosoft_com/_layouts/15/Doc.aspx?sourcedoc=%7BE6EBA450-9DD6-442F-95A3-270ABABD1F8B%7D&file=%D9%86%D8%B8%D8%A7%D9%85_%D8%A7%D9%84%D9%85%D8%A8%D9%8A%D8%B9%D8%A7%D8%AA_%D9%88%D8%A7%D9%84%D9%85%D9%82%D8%A7%D8%B9%D8%AF_v5.xlsx&action=default&mobileredirect=true"},
-    {name:"عقيل",  url:"https://achievers544-my.sharepoint.com/:x:/r/personal/ahmednajim_achievers544_onmicrosoft_com/_layouts/15/Doc.aspx?sourcedoc=%7B596E5C23-D0AF-4A2C-85D9-8979A51A4BA1%7D&file=%D9%86%D8%B8%D8%A7%D9%85_%D8%A7%D9%84%D9%85%D8%A8%D9%8A%D8%B9%D8%A7%D8%AA_%D9%88%D8%A7%D9%84%D9%85%D9%82%D8%A7%D8%B9%D8%AF_v5%20-%20%D8%B9%D9%82%D9%8A%D9%84.xlsx&action=default&mobileredirect=true"}
+    {name:"مرتضى", url:"https://achievers544-my.sharepoint.com/:x:/g/personal/ahmednajim_achievers544_onmicrosoft_com/IQDvBvVdW1KqSptZfDhy26qlAc1_IpJmXk1D5NdGyf2Ksbg?e=DsLoWr"},
+    {name:"عقيل",  url:"https://achievers544-my.sharepoint.com/:x:/g/personal/ahmednajim_achievers544_onmicrosoft_com/IQBEewHSUIETR4NHmKO170EQAZxOAAuh200uFJjLLJvcOsA?e=OLRnWe"}
   ]
 };
 const GRAPH="https://graph.microsoft.com/v1.0";
@@ -247,14 +255,14 @@ async function api(path,opt={}){
   if(!r.ok){
     const m=j.error?.message||r.statusText;
     if(r.status===401){S.t=null;throw new Error("انتهت الجلسة — سجّل الدخول من جديد")}
-    if(r.status===403)throw new Error("الكتابة مرفوضة. غالبًا بسبب حماية ورقة «المقاعد» — أزل الحماية عنها.");
+    if(r.status===403)throw new Error("الكتابة مرفوضة — تأكد أن لديك صلاحية تعديل على ملف هذا المورد.");
     throw new Error(m);
   }
   return j;
 }
 
 /* ═══════════════ حالة التشغيل ═══════════════ */
-let SUP=null, FILE=null, ROWS=null, HIT=null;
+let SUP=null, FILE=null, ROWS=null, HIT=null, EVENTS=[];
 const items=[];
 
 function shareId(url){
@@ -262,6 +270,7 @@ function shareId(url){
   return "u!"+b.replace(/=+$/,"").replace(/\//g,"_").replace(/\+/g,"-");
 }
 async function openFile(sup){
+  if(!/^https?:/.test(sup.url))throw new Error("رابط ملف "+sup.name+" غير مضاف بالكود.");
   const d=await api(`/shares/${shareId(sup.url)}/driveItem`);
   return {driveId:d.parentReference.driveId,itemId:d.id,name:d.name};
 }
@@ -280,18 +289,28 @@ function findRow(id){
 }
 async function inSales(id){
   try{
-    const r=await api(`${SH(CFG.salesSheet)}/range(address='C1:D400')?$select=values`);
-    const v=r.values||[];
-    for(let i=1;i<v.length;i++) if(clean(v[i][1])===id) return v[i][0]||"";
+    const r=await api(`${SH(CFG.salesSheet)}/range(address='C1:F3001')?$select=values`);
+    const v=r.values||[]; let hit=null;
+    for(let i=1;i<v.length;i++) if(clean(v[i][1])===id){hit={name:v[i][0]||"",st:String(v[i][3]||"").trim()}; if(hit.st==="تم الشراء")break}
+    return hit;
   }catch(e){}
   return null;
+}
+async function loadEvents(){
+  const r=await api(`${SH(CFG.setSheet)}/range(address='M2:M101')?$select=values`);
+  EVENTS=(r.values||[]).map(x=>String(x[0]??"").trim()).filter(Boolean);
+  const sel=$("#evt"); sel.innerHTML="";
+  if(!EVENTS.length){sel.add(new Option("لا توجد فعاليات — أضفها بورقة الإعدادات",""));sel.disabled=true;return}
+  sel.disabled=false; sel.add(new Option("— اختر الفعالية —",""));
+  EVENTS.forEach(e=>sel.add(new Option(e,e)));
+  const last=sessionStorage.gate_evt; if(last&&EVENTS.includes(last))sel.value=last;
 }
 
 /* ═══════════════ الواجهة ═══════════════ */
 function renderLog(){
   $("#cnt").textContent=items.length;
   $("#log").innerHTML=items.map(x=>`<div class="li">
-    <span><b>${esc(x.n)}</b><br><span class="v">${esc(x.id)}</span></span>
+    <span><b>${esc(x.n)}</b><br><span class="v">${esc(x.id)}${x.ev?" · "+esc(x.ev):""}</span></span>
     <span class="a num">+${fmt(x.a)}</span><span class="t">${x.t}</span></div>`).join("")
     ||`<div style="color:var(--faint);font-size:12.5px;text-align:center;padding:12px">لا تسجيلات بعد</div>`;
 }
@@ -313,21 +332,23 @@ async function lookup(id){
     let f=findRow(id);
     if(!f){ await loadRows(); f=findRow(id); }
     if(!f){
-      const nm=await inSales(id);
-      paint("y",{name:nm||"غير مسجّل",id,big:"—",
-        cap:nm?"موجود في المبيعات لكن بلا مقعد":"هذا المعرف غير موجود في ملف هذا المورد"});
+      const h=await inSales(id);
+      const cap=!h?"هذا المعرف غير موجود في ملف هذا المورد"
+        :h.st==="تم الاسترجاع"?"هذا المقعد تم استرجاعه — لا يُحتسب"
+        :h.st!=="تم الشراء"?`موجود في المبيعات بحالة «${esc(h.st)}» — بلا مقعد`
+        :"موجود في المبيعات لكن بلا مقعد";
+      paint(h&&h.st==="تم الاسترجاع"?"r":"y",{name:(h&&h.name)||"غير مسجّل",id,big:h&&h.st==="تم الاسترجاع"?"مسترجع":"—",cap});
       say($("#mFind"),"");return;
     }
     const v=f.v;
-    const dep=num(v[4]),used=num(v[5]),rem=num(v[6]),st=String(v[8]||"").trim();
-    const ret=st==="تم الاسترجاع";
+    const dep=num(v[4]),used=num(v[5]),rem=num(v[6]);
+    const lastScan=typeof v[8]==="number"?xlDate(v[8]):"";
     const meta=`<div><span class="k">الابلاين</span>${esc(v[2]||"—")}</div>
       <div><span class="k">المورد</span>${esc(v[3]||"—")}</div>
       <div><span class="k">المقعد المودع</span><span class="num">${fmt(dep)}</span></div>
-      <div><span class="k">المستخدم سابقًا</span><span class="num">${fmt(used)}</span></div>`;
-    if(ret){
-      paint("r",{name:v[1]||"—",id,big:"مسترجع",cap:"هذا المقعد تم استرجاعه — لا يُحتسب",meta});
-    }else if(rem>0){
+      <div><span class="k">المستخدم سابقًا</span><span class="num">${fmt(used)}</span></div>
+      ${lastScan?`<div><span class="k">آخر مسح</span><span class="num">${lastScan}</span></div><div><span class="k">آخر فعالية</span>${esc(v[9]||"—")}</div>`:""}`;
+    if(rem>0){
       paint("g",{name:v[1]||"—",id,big:fmt(rem),cap:"الرصيد المتبقي — يمكن التسجيل",meta});
       HIT={row:f.row,id,name:v[1]||"—",dep,used,rem};
       $("#amt").value=""; $("#amt").max=rem;
@@ -340,21 +361,29 @@ async function lookup(id){
   }catch(e){say($("#mFind"),esc(e.message),"bad")}
 }
 
+const EPOCH=Date.UTC(1899,11,30);
+const nowSerial=()=>(Date.now()-new Date().getTimezoneOffset()*60000-EPOCH)/864e5;
+const xlDate=x=>{const d=new Date(EPOCH+x*864e5),p=n=>String(n).padStart(2,"0");return `${p(d.getUTCDate())}/${p(d.getUTCMonth()+1)}/${d.getUTCFullYear()} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`};
 async function confirmSave(){
   if(!HIT)return;
-  const a=num($("#amt").value);
+  const a=num($("#amt").value), ev=$("#evt").value;
+  if(EVENTS.length&&!ev){say($("#mSave"),"اختر الفعالية أولاً (أعلى الصفحة)","bad");return}
   if(a<=0){say($("#mSave"),"اكتب مبلغًا أكبر من صفر","bad");return}
   if(a>HIT.rem){say($("#mSave"),`المبلغ أكبر من الرصيد المتبقي (${fmt(HIT.rem)})`,"bad");return}
   $("#bConfirm").disabled=true; busy($("#mSave"),"جارٍ الكتابة في الملف…");
   try{
-    await api(`${SH(CFG.sheet)}/range(address='${CFG.colUsed}${HIT.row}')`,
-      {method:"PATCH",body:JSON.stringify({values:[[HIT.used+a]]})});
-    items.unshift({id:HIT.id,n:HIT.name,a,t:new Date().toLocaleTimeString("ar",{hour:"2-digit",minute:"2-digit"})});
+    const u=await api(`${SH(CFG.logSheet)}/usedRange(valuesOnly=true)?$select=address`);
+    const last=+((/(\d+)$/.exec(u.address||"")||[0,1])[1]);
+    const r=Math.max(last,1)+1;
+    if(r>5001)throw new Error("سجل المقاعد ممتلئ (5000 سطر).");
+    await api(`${SH(CFG.logSheet)}/range(address='A${r}:F${r}')`,
+      {method:"PATCH",body:JSON.stringify({values:[[nowSerial(),HIT.id,HIT.name,a,ev,""]]})});
+    items.unshift({id:HIT.id,n:HIT.name,a,ev,t:new Date().toLocaleTimeString("ar",{hour:"2-digit",minute:"2-digit"})});
     renderLog();
     say($("#mSave"),`✓ سُجّل ${fmt(a)} — المتبقي الآن ${fmt(HIT.rem-a)}`,"");
     ROWS=null;
     const id=HIT.id; clearResult();
-    setTimeout(()=>lookup(id),400);
+    setTimeout(()=>lookup(id),600);
     if(navigator.vibrate)navigator.vibrate([40,60,40]);
   }catch(e){say($("#mSave"),esc(e.message),"bad")}
   finally{$("#bConfirm").disabled=false}
@@ -422,6 +451,7 @@ $("#idm").addEventListener("keydown",e=>{if(e.key==="Enter")lookup($("#idm").val
 $("#idm").addEventListener("input",e=>{const p=e.target.selectionStart;
   e.target.value=e.target.value.toUpperCase();e.target.setSelectionRange(p,p)});
 $("#bConfirm").onclick=confirmSave;
+$("#evt").onchange=e=>{sessionStorage.gate_evt=e.target.value};
 $("#bCancel").onclick=clearResult;
 $("#amt").addEventListener("keydown",e=>{if(e.key==="Enter")confirmSave()});
 $("#bSwitch").onclick=()=>{camOff();clearResult();ROWS=null;FILE=null;SUP=null;
@@ -435,6 +465,7 @@ function renderPick(){
     try{
       FILE=await openFile(s); SUP=s;
       $("#tSup").textContent=s.name;
+      await loadEvents();
       say($("#mPick"),""); items.length=0; renderLog(); clearResult(); show("vScan");
     }catch(e){say($("#mPick"),esc(e.message),"bad")}
   });
