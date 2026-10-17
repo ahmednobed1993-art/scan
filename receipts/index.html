@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>إدخال وصولات الشراء</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧾</text></svg>">
+<style>
+:root{--bg:#f3f1ec;--card:#fff;--ink:#1d2433;--mute:#6b7280;--line:#e2ded5;--acc:#1f4e78;--acc2:#e7eef6;--ok:#1e7a46;--okbg:#e5f4ea;--bad:#b42318;--badbg:#fdecea;--calc:#eef6e9;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#14171d;--card:#1c2029;--ink:#e8eaee;--mute:#9aa1ad;--line:#2c323d;--acc:#6aa5dc;--acc2:#1f2a38;--ok:#5cc38a;--okbg:#16281e;--bad:#f0837a;--badbg:#2e1a19;--calc:#1b2a1f;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",Tahoma,Arial,sans-serif;font-size:15px}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+main{max-width:760px;margin:0 auto;padding:16px}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+h1{font-size:20px;margin:0}
+.who{font-size:13px;color:var(--mute)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.card h2{font-size:15px;margin:0 0 12px;color:var(--acc)}
+button{font:inherit;border:0;border-radius:8px;padding:10px 16px;cursor:pointer;background:var(--acc);color:#fff;font-weight:600}
+button.ghost{background:var(--acc2);color:var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+label{display:block;font-size:13px;color:var(--mute);margin-bottom:4px}
+input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:9px 10px}
+textarea{min-height:60px;resize:vertical}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:28px 12px;text-align:center;cursor:pointer;color:var(--mute)}
+.drop.over{border-color:var(--acc);background:var(--acc2)}
+.drop img{max-width:100%;max-height:260px;border-radius:8px;margin-top:10px}
+.q{border-top:1px solid var(--line);padding:12px 0 0;margin-top:12px}
+.yn{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.yn .t{flex:1 1 160px;font-weight:600}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border-radius:0;background:transparent;color:var(--ink);padding:8px 16px;font-weight:500}
+.seg button.on{background:var(--acc);color:#fff}
+.yn input{flex:0 1 150px}
+.hidden{display:none!important}
+.calc{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
+.calc div{background:var(--calc);border-radius:8px;padding:10px;text-align:center}
+.calc b{display:block;font-size:18px;margin-top:2px;direction:ltr}
+.calc span{font-size:12px;color:var(--mute)}
+.msg{padding:10px 12px;border-radius:8px;margin-bottom:14px;font-size:14px;white-space:pre-wrap}
+.msg.ok{background:var(--okbg);color:var(--ok)}.msg.bad{background:var(--badbg);color:var(--bad)}.msg.info{background:var(--acc2);color:var(--acc)}
+.addr{font-size:12px;color:var(--mute);margin-top:4px}
+.actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.actions button{flex:1}
+details summary{cursor:pointer;color:var(--mute);font-size:14px}
+.ltr{direction:ltr;text-align:left}
+@media (max-width:520px){.calc{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>🧾 إدخال وصولات الشراء</h1>
+  <div><span class="who" id="who"></span> <button id="btnLogin" class="ghost">تسجيل الدخول</button></div>
+</header>
+
+<div id="msg"></div>
+
+<details class="card" id="setBox">
+  <summary>الإعدادات</summary>
+  <div class="grid" style="margin-top:12px">
+    <div><label>مفتاح Claude API</label><input id="sKey" type="password" class="ltr" placeholder="sk-ant-..."></div>
+    <div><label>رابط مشاركة ملف الإكسل (OneDrive)</label><input id="sLink" class="ltr" placeholder="https://...sharepoint.com/..."></div>
+    <div><label>النموذج</label><input id="sModel" class="ltr"></div>
+  </div>
+  <div class="actions"><button id="btnSaveSet">حفظ الإعدادات</button></div>
+</details>
+
+<section class="card" id="upCard">
+  <h2>صورة الوصل</h2>
+  <div class="drop" id="drop">اسحب الصورة هنا، أو اضغط للاختيار، أو الصق (Ctrl+V)
+    <input type="file" id="file" accept="image/*" class="hidden">
+    <div><img id="prev" class="hidden" alt=""></div>
+  </div>
+</section>
+
+<section class="card hidden" id="formCard">
+  <h2>بيانات الوصل (راجعها وعدّل إذا لزم)</h2>
+  <div class="grid">
+    <div><label>اسم العميل</label><input id="fName"></div>
+    <div><label>المعرف</label><input id="fId" class="ltr"></div>
+    <div><label>الرقم</label><input id="fPhone" class="ltr"></div>
+    <div><label>المدينة</label><select id="fCity"></select><div class="addr" id="fAddr"></div></div>
+    <div><label>BV</label><input id="fBV" type="number" class="ltr"></div>
+    <div><label>مبلغ الإيكارد (إجمالي الوصل)</label><input id="fEc" type="number" step="0.01" class="ltr"></div>
+    <div><label>تاريخ الوصل (هونك كونك)</label><input id="fDate" type="datetime-local" step="1" class="ltr"></div>
+    <div><label>رقم الطلب</label><input id="fOrder" class="ltr"></div>
+  </div>
+
+  <div class="q grid">
+    <div><label>المورد</label><select id="fSup"></select></div>
+    <div><label>حالة المبيع</label><select id="fStat"></select></div>
+    <div><label>الابلاين</label><select id="fUp"></select></div>
+  </div>
+
+  <div class="q yn" data-k="seat"><span class="t">هل لديه مقعد؟</span><div class="seg"><button data-v="1">نعم</button><button data-v="0" class="on">لا</button></div><input type="number" step="0.01" class="ltr hidden" placeholder="قيمة المقعد $"></div>
+  <div class="q yn" data-k="idc"><span class="t">هل لديه هوية؟</span><div class="seg"><button data-v="1">نعم</button><button data-v="0" class="on">لا</button></div><input type="number" step="0.01" class="ltr hidden" placeholder="مبلغ الهوية $"></div>
+  <div class="q yn" data-k="evt"><span class="t">هل لديه فعاليات؟</span><div class="seg"><button data-v="1">نعم</button><button data-v="0" class="on">لا</button></div><input type="number" step="0.01" class="ltr hidden" placeholder="مبلغ الفعاليات $"></div>
+
+  <div class="q grid">
+    <div><label>المبلغ المدفوع (اختياري)</label><input id="fPaid" type="number" step="0.01" class="ltr"></div>
+    <div style="grid-column:1/-1"><label>الملاحظات</label><textarea id="fNote"></textarea></div>
+  </div>
+
+  <div class="calc">
+    <div><span>الأسبوع</span><b id="cW">-</b></div>
+    <div><span>المبلغ</span><b id="cA">-</b></div>
+    <div><span>المجموع</span><b id="cT">-</b></div>
+    <div><span>الفرق</span><b id="cD">-</b></div>
+  </div>
+
+  <div class="actions">
+    <button id="btnSave">حفظ بالإكسل</button>
+    <button id="btnReset" class="ghost">إلغاء</button>
+  </div>
+</section>
+</main>
+
+<script>
+const CFG={
+  tenant:"add292fe-6f9c-4c4b-b345-1ee796e7da71",
+  client:"b92e1e1c-b978-4675-a5b4-12d738463406",
+  redirect:"https://ahmednobed1993-art.github.io/scan/receipts/",
+  scope:"offline_access openid profile User.Read Files.ReadWrite.All",
+  shData:"الوصولات", shSet:"الإعدادات", defModel:"claude-sonnet-5-5"
+};
+const $=id=>document.getElementById(id);
+const LS={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}},del:k=>{try{localStorage.removeItem(k)}catch(e){}}};
+let SET=null, FILE=null;
+
+function msg(t,c="info"){$("msg").innerHTML=t?`<div class="msg ${c}"></div>`:"";if(t)$("msg").firstChild.textContent=t;window.scrollTo({top:0,behavior:"smooth"})}
+
+/* ───── تسجيل الدخول (PKCE) ───── */
+const b64u=buf=>btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+const AUTH=`https://login.microsoftonline.com/${CFG.tenant}/oauth2/v2.0`;
+async function login(){
+  const v=b64u(crypto.getRandomValues(new Uint8Array(32)));
+  const ch=b64u(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v)));
+  const st=b64u(crypto.getRandomValues(new Uint8Array(16)));
+  sessionStorage.setItem("pk_v",v);sessionStorage.setItem("pk_s",st);
+  const p=new URLSearchParams({client_id:CFG.client,response_type:"code",redirect_uri:CFG.redirect,response_mode:"query",scope:CFG.scope,code_challenge:ch,code_challenge_method:"S256",state:st,prompt:"select_account"});
+  location.href=`${AUTH}/authorize?${p}`;
+}
+async function tokenReq(body){
+  const r=await fetch(`${AUTH}/token`,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({client_id:CFG.client,scope:CFG.scope,...body})});
+  const j=await r.json(); if(!r.ok) throw new Error(j.error_description||j.error||"فشل تسجيل الدخول");
+  LS.set("rc_tok",JSON.stringify({at:j.access_token,rt:j.refresh_token,exp:Date.now()+(j.expires_in-60)*1000}));
+}
+async function handleRedirect(){
+  const q=new URLSearchParams(location.search);
+  if(q.get("error")){msg("خطأ تسجيل الدخول: "+(q.get("error_description")||q.get("error")),"bad");history.replaceState(null,"",location.pathname);return}
+  if(!q.get("code"))return;
+  history.replaceState(null,"",location.pathname);
+  if(q.get("state")!==sessionStorage.getItem("pk_s")){msg("فشل التحقق من تسجيل الدخول، أعد المحاولة.","bad");return}
+  await tokenReq({grant_type:"authorization_code",code:q.get("code"),redirect_uri:CFG.redirect,code_verifier:sessionStorage.getItem("pk_v")});
+}
+async function token(){
+  const t=JSON.parse(LS.get("rc_tok")||"null"); if(!t)return null;
+  if(Date.now()<t.exp)return t.at;
+  try{await tokenReq({grant_type:"refresh_token",refresh_token:t.rt});return JSON.parse(LS.get("rc_tok")).at}
+  catch(e){LS.del("rc_tok");return null}
+}
+
+/* ───── Graph ───── */
+async function g(path,opt={}){
+  const at=await token(); if(!at)throw new Error("سجّل الدخول أولاً.");
+  const r=await fetch("https://graph.microsoft.com/v1.0"+path,{...opt,headers:{Authorization:"Bearer "+at,"Content-Type":"application/json"}});
+  if(r.status===401){LS.del("rc_tok");throw new Error("انتهت الجلسة، سجّل الدخول مرة ثانية.")}
+  const j=r.status===204?{}:await r.json();
+  if(!r.ok)throw new Error((j.error&&j.error.message)||("Graph "+r.status));
+  return j;
+}
+async function wb(){
+  const link=LS.get("rc_link"); if(!link)throw new Error("أضف رابط ملف الإكسل بالإعدادات.");
+  const c=JSON.parse(LS.get("rc_item")||"null");
+  if(c&&c.link===link)return c.p;
+  const id="u!"+btoa(link).replace(/=+$/,"").replace(/\//g,"_").replace(/\+/g,"-");
+  const it=await g(`/shares/${id}/driveItem?$select=id,parentReference`);
+  const p=`/drives/${it.parentReference.driveId}/items/${it.id}/workbook`;
+  LS.set("rc_item",JSON.stringify({link,p})); return p;
+}
+const wsP=async n=>`${await wb()}/worksheets/${encodeURIComponent(n)}`;
+
+async function loadSettings(){
+  const r=await g(`${await wsP(CFG.shSet)}/range(address='A1:J61')?$select=values`);
+  const v=r.values, col=c=>v.slice(1).map(x=>x[c]).filter(x=>x!==""&&x!==null).map(String);
+  SET={reg:+v[1][1], rate:+v[2][1], starts:v.slice(1,20).map(x=>x[3]).filter(x=>typeof x==="number").sort((a,b)=>a-b),
+       sup:col(6), city:col(7), stat:col(8), up:col(9)};
+  fill("fSup",SET.sup,true); fill("fCity",SET.city,true); fill("fStat",SET.stat,false); fill("fUp",SET.up,true);
+  const ls=LS.get("rc_sup"); if(ls&&SET.sup.includes(ls))$("fSup").value=ls;
+}
+function fill(id,arr,blank){const s=$(id);s.innerHTML=(blank?'<option value="">— اختر —</option>':"")+arr.map(x=>`<option></option>`).join("");[...s.options].slice(blank?1:0).forEach((o,i)=>{o.value=arr[i];o.textContent=arr[i]})}
+
+/* ───── قراءة الوصل ───── */
+const PROMPT=`This image is a QNET purchase confirmation receipt in Arabic. Return ONLY a JSON object (no markdown, no commentary) with these keys:
+"rep_id": value of "رقم هوية الممثل المستقل",
+"order_no": value of "رقم الطلب",
+"customer_name": value of "اسم العميل" exactly as written in Arabic,
+"address": full text of "العنوان السكني",
+"phone": value of "رقم الاتصال" (digits only),
+"ecard_total": number — the grand total "إجمالي المبلغ المدفوع" (without currency or commas),
+"datetime": value of "تاريخ الصفقة" as "YYYY-MM-DDTHH:MM:SS" (convert Arabic month names to numbers),
+"bv_points": array of numbers from the "النقاط المضافة" column of the "توزيع النقاط" table.
+Use null for anything not found. Read digits carefully.`;
+
+function shrink(file){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{const m=1800,k=Math.min(1,m/Math.max(img.width,img.height));const c=document.createElement("canvas");c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);c.getContext("2d").drawImage(img,0,0,c.width,c.height);res(c.toDataURL("image/jpeg",0.92))};img.onerror=()=>rej(new Error("تعذر فتح الصورة"));img.src=URL.createObjectURL(file)})}
+
+async function readReceipt(file){
+  const key=LS.get("rc_key"); if(!key){$("setBox").open=true;throw new Error("أضف مفتاح Claude API بالإعدادات.")}
+  const url=await shrink(file); $("prev").src=url; $("prev").classList.remove("hidden");
+  msg("جاري قراءة الوصل...");
+  const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"content-type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    body:JSON.stringify({model:LS.get("rc_model")||CFG.defModel,max_tokens:1024,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:url.split(",")[1]}},{type:"text",text:PROMPT}]}]})});
+  const j=await r.json(); if(!r.ok)throw new Error("Claude: "+((j.error&&j.error.message)||r.status));
+  const t=j.content.filter(c=>c.type==="text").map(c=>c.text).join(""); const s=t.indexOf("{"),e=t.lastIndexOf("}");
+  if(s<0)throw new Error("ما گدرت أقرأ الوصل، جرّب صورة أوضح.");
+  return JSON.parse(t.slice(s,e+1));
+}
+
+const norm=s=>String(s||"").replace(/[أإآ]/g,"ا").replace(/ة/g,"ه").replace(/ى/g,"ي").replace(/ـ/g,"").replace(/\s+/g," ").trim();
+const ALIAS={"ذي قار":"الناصرية","ميسان":"العمارة","واسط":"الكوت","المثنى":"السماوة","الانبار":"الرمادي","صلاح الدين":"تكريت","ديالى":"بعقوبة","نينوى":"الموصل","القادسية":"الديوانية"};
+function matchCity(addr){
+  const a=" "+norm(addr)+" ";
+  const items=[...SET.city].sort((x,y)=>y.length-x.length);
+  for(const c of items){const core=norm(c).replace(/^ال/,"");if(core.length>2&&a.includes(core))return c}
+  for(const [k,v] of Object.entries(ALIAS)){if(a.includes(norm(k).replace(/^ال/,""))&&SET.city.includes(v))return v}
+  return "";
+}
+function phone(p){let d=String(p||"").replace(/\D/g,"");if(d.startsWith("00964"))d=d.slice(5);else if(d.startsWith("964"))d=d.slice(3);return d&&!d.startsWith("0")?"0"+d:d}
+
+function showData(d){
+  $("fName").value=d.customer_name||""; $("fId").value=(d.rep_id||"").trim(); $("fPhone").value=phone(d.phone);
+  $("fAddr").textContent=d.address?"العنوان: "+d.address:""; $("fCity").value=matchCity(d.address);
+  $("fBV").value=Array.isArray(d.bv_points)?d.bv_points.reduce((s,x)=>s+(+x||0),0):"";
+  $("fEc").value=d.ecard_total??""; $("fDate").value=(d.datetime||"").slice(0,19); $("fOrder").value=(d.order_no||"").trim();
+  $("fStat").value=SET.stat.includes("تم الشراء")?"تم الشراء":SET.stat[0]||"";
+  $("formCard").classList.remove("hidden"); calc();
+  msg($("fCity").value?"تمت القراءة. راجع البيانات وجاوب على الأسئلة.":"تمت القراءة. المدينة ما انعرفت تلقائياً، اختارها يدوياً.", $("fCity").value?"ok":"info");
+}
+
+/* ───── الحسابات ───── */
+function serial(dt){const m=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/.exec(dt||"");if(!m)return null;return (Date.UTC(+m[1],m[2]-1,+m[3],+m[4],+m[5],+(m[6]||0))-Date.UTC(1899,11,30))/864e5}
+function week(sr){if(sr==null||!SET)return null;const d=Math.floor(sr);const s=SET.starts.filter(x=>x<=d).pop();return s==null?null:Math.floor((d-s)/7)+1}
+const amt=k=>{const b=document.querySelector(`.yn[data-k="${k}"]`);return b.dataset.on==="1"?(parseFloat(b.querySelector("input").value)||0):null};
+const f2=n=>n==null||isNaN(n)?"-":n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+function calc(){
+  const ec=parseFloat($("fEc").value); const a=isNaN(ec)?null:(ec+SET.reg)*SET.rate;
+  const tot=a==null?null:a+(amt("seat")||0)+(amt("idc")||0)+(amt("evt")||0);
+  const paid=parseFloat($("fPaid").value);
+  $("cW").textContent=week(serial($("fDate").value))??"-"; $("cA").textContent=f2(a); $("cT").textContent=f2(tot);
+  $("cD").textContent=isNaN(paid)||tot==null?"-":f2(paid-tot);
+}
+document.querySelectorAll(".yn").forEach(b=>{b.dataset.on="0";b.querySelectorAll(".seg button").forEach(x=>x.onclick=()=>{
+  b.dataset.on=x.dataset.v;b.querySelectorAll(".seg button").forEach(y=>y.classList.toggle("on",y===x));
+  const i=b.querySelector("input");i.classList.toggle("hidden",x.dataset.v!=="1");if(x.dataset.v==="1")i.focus();else i.value="";calc()})});
+["fEc","fDate","fPaid"].forEach(id=>$(id).addEventListener("input",calc));
+document.querySelectorAll(".yn input").forEach(i=>i.addEventListener("input",calc));
+
+/* ───── الحفظ ───── */
+const txt=s=>{s=String(s??"").trim();return /^[=+\-@]/.test(s)?"\u200F"+s:s};
+const num=v=>{const n=parseFloat(v);return isNaN(n)?"":n};
+async function save(){
+  const need=[["fName","اسم العميل"],["fId","المعرف"],["fSup","المورد"],["fEc","مبلغ الإيكارد"],["fDate","تاريخ الوصل"],["fOrder","رقم الطلب"]];
+  const miss=need.filter(([id])=>!$(id).value.trim()).map(x=>x[1]);
+  for(const [k,n] of [["seat","المقعد"],["idc","الهوية"],["evt","الفعاليات"]]) if(amt(k)!==null&&!(amt(k)>0))miss.push("قيمة "+n);
+  if(miss.length)return msg("أكمل: "+miss.join("، "),"bad");
+  const sr=serial($("fDate").value); if(sr==null)return msg("تاريخ الوصل غير صحيح.","bad");
+  $("btnSave").disabled=true; msg("جاري الحفظ...");
+  try{
+    const p=await wsP(CFG.shData);
+    const u=await g(`${p}/usedRange(valuesOnly=true)?$select=address,values`);
+    const last=+(/(\d+)$/.exec(u.address)||[0,1])[1];
+    const ord=norm($("fOrder").value).toUpperCase();
+    const dup=u.values.findIndex((row,i)=>i>0&&norm(row[17]).toUpperCase()===ord);
+    if(dup>0){msg(`هذا الوصل (${$("fOrder").value}) موجود مسبقاً بالسطر ${dup+1}. ما انحفظ.`,"bad");return}
+    const r=Math.max(last,1)+1, S="'الإعدادات'";
+    const F=[
+      `=IF(S${r}="","",INT((INT(S${r})-LOOKUP(INT(S${r}),${S}!$D$2:$D$20))/7)+1)`,
+      txt($("fSup").value), txt($("fName").value), txt($("fId").value), txt($("fCity").value), txt($("fStat").value),
+      num($("fBV").value),
+      `=IF(T${r}="","",(T${r}+${S}!$B$2)*${S}!$B$3)`,
+      amt("seat")??"", amt("idc")??"", amt("evt")??"",
+      `=IF(C${r}="","",SUM(H${r}:K${r}))`,
+      num($("fPaid").value),
+      `=IF(OR(L${r}="",M${r}=""),"",M${r}-L${r})`,
+      txt($("fPhone").value), txt($("fUp").value), txt($("fNote").value),
+      txt($("fOrder").value), sr, num($("fEc").value)];
+    const NF=["0","General","General","@","General","General","#,##0","#,##0.00","#,##0.00","#,##0.00","#,##0.00","#,##0.00","#,##0.00","#,##0.00","@","General","General","@","dd/mm/yyyy hh:mm:ss","#,##0.00"];
+    await g(`${p}/range(address='A${r}:T${r}')`,{method:"PATCH",body:JSON.stringify({numberFormat:[NF],formulas:[F]})});
+    LS.set("rc_sup",$("fSup").value);
+    reset(); msg(`تم الحفظ بالسطر ${r} ✔`,"ok");
+  }catch(e){msg(e.message,"bad")}finally{$("btnSave").disabled=false}
+}
+function reset(){
+  ["fName","fId","fPhone","fBV","fEc","fDate","fOrder","fPaid","fNote"].forEach(id=>$(id).value="");
+  $("fCity").value="";$("fUp").value="";$("fAddr").textContent="";
+  document.querySelectorAll(".yn").forEach(b=>b.querySelector('.seg button[data-v="0"]').click());
+  $("formCard").classList.add("hidden");$("prev").classList.add("hidden");$("file").value="";msg("");
+}
+
+/* ───── الواجهة ───── */
+async function onFile(f){
+  if(!f||!f.type.startsWith("image/"))return msg("اختر ملف صورة.","bad");
+  if(!SET)return msg("سجّل الدخول وأضف رابط الإكسل أولاً.","bad");
+  try{showData(await readReceipt(f))}catch(e){msg(e.message,"bad")}
+}
+const dz=$("drop");
+dz.onclick=e=>{if(e.target.tagName!=="IMG")$("file").click()};
+$("file").onchange=e=>onFile(e.target.files[0]);
+dz.ondragover=e=>{e.preventDefault();dz.classList.add("over")};
+dz.ondragleave=()=>dz.classList.remove("over");
+dz.ondrop=e=>{e.preventDefault();dz.classList.remove("over");onFile(e.dataTransfer.files[0])};
+document.addEventListener("paste",e=>{const it=[...(e.clipboardData||{}).items||[]].find(i=>i.type.startsWith("image/"));if(it)onFile(it.getAsFile())});
+$("btnSave").onclick=save; $("btnReset").onclick=reset;
+$("btnLogin").onclick=()=>{if(LS.get("rc_tok")){LS.del("rc_tok");init()}else login()};
+$("btnSaveSet").onclick=async()=>{
+  LS.set("rc_key",$("sKey").value.trim()); LS.set("rc_link",$("sLink").value.trim()); LS.set("rc_model",$("sModel").value.trim()||CFG.defModel);
+  $("setBox").open=false; await init();
+};
+
+async function init(){
+  $("sKey").value=LS.get("rc_key")||""; $("sLink").value=LS.get("rc_link")||""; $("sModel").value=LS.get("rc_model")||CFG.defModel;
+  const at=await token();
+  $("btnLogin").textContent=at?"تسجيل الخروج":"تسجيل الدخول";
+  if(!at){$("who").textContent="";SET=null;return msg("سجّل الدخول بحساب Microsoft حتى تبدأ.")}
+  try{const me=await g("/me?$select=displayName");$("who").textContent=me.displayName}catch(e){}
+  if(!LS.get("rc_key")||!LS.get("rc_link")){$("setBox").open=true;return msg("أكمل الإعدادات: مفتاح Claude ورابط ملف الإكسل.")}
+  try{await loadSettings();msg("جاهز. ارفع صورة الوصل.","ok")}catch(e){SET=null;msg("تعذر قراءة ملف الإكسل: "+e.message,"bad")}
+}
+(async()=>{try{await handleRedirect()}catch(e){msg(e.message,"bad")}await init()})();
+</script>
+</body>
+</html>
