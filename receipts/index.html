@@ -93,10 +93,10 @@ table.rep{width:100%;border-collapse:collapse;font-size:14px;min-width:640px}
   </section>
 
   <section class="card">
-    <h2>صورة الوصل</h2>
-    <div class="drop" id="drop">اسحب الصورة هنا، أو اضغط للاختيار، أو الصق (Ctrl+V)
-      <input type="file" id="file" accept="image/*" class="hidden">
-      <div><img id="prev" class="hidden" alt=""></div>
+    <h2>الوصل (صورة أو PDF)</h2>
+    <div class="drop" id="drop">اسحب الوصل هنا (صورة أو PDF)، أو اضغط للاختيار، أو الصق (Ctrl+V)
+      <input type="file" id="file" accept="image/*,application/pdf,.pdf" class="hidden">
+      <div><img id="prev" class="hidden" alt=""><div id="pdfName" class="hidden" style="margin-top:10px;font-weight:600"></div></div>
     </div>
   </section>
 
@@ -146,7 +146,8 @@ table.rep{width:100%;border-collapse:collapse;font-size:14px;min-width:640px}
         <div><label>مفتاح Claude API</label><input id="sKey" type="password" class="ltr" placeholder="sk-ant-..."></div>
         <div><label>النموذج</label><input id="sModel" class="ltr"></div>
       </div>
-      <div class="actions"><button id="btnSaveSet">حفظ الإعدادات</button></div>
+      <div class="actions"><button id="btnSaveSet">حفظ الإعدادات</button><button id="btnIds" class="ghost hidden">معرفات الملفات</button></div>
+      <textarea id="idsOut" class="ltr hidden" readonly style="margin-top:10px;min-height:80px;font-size:12px"></textarea>
     </div>
   </details>
 </div>
@@ -184,6 +185,11 @@ const CFG={
     "ahmednajim@achievers544.onmicrosoft.com":"*",
     "murtadhacommission@gmail.com":"مرتضى",
     "akil.knights24@gmail.com":"عقيل"
+  },
+  /* معرفات الملفات الثابتة (تُملأ بعد زر «معرفات الملفات» من حسابك) */
+  IDS:{
+    "مرتضى":"",
+    "عقيل":""
   },
   SET_HASH:"0f4f689bd9bd6ae3d1a3884ebd48c4c7e07274b46ca10efcf2d33ea85b976022",
   shSales:"المبيعات", shSet:"الإعدادات", rows:3000, defModel:"claude-sonnet-5-5"
@@ -231,7 +237,7 @@ async function token(){
 /* ═════════════ Graph ═════════════ */
 async function g(path,opt={}){
   const at=await token(); if(!at)throw new Error("سجّل الدخول أولاً.");
-  const r=await fetch("https://graph.microsoft.com/v1.0"+path,{...opt,headers:{Authorization:"Bearer "+at,"Content-Type":"application/json"}});
+  const r=await fetch("https://graph.microsoft.com/v1.0"+path,{...opt,headers:{Authorization:"Bearer "+at,"Content-Type":"application/json",...(opt.headers||{})}});
   if(r.status===401){LS.del("rc_tok");throw new Error("انتهت الجلسة، سجّل الدخول مرة ثانية.")}
   if(r.status===403)throw new Error("ليس لديك صلاحية على هذا الملف (تأكد من مشاركته مع إيميلك وتفعيل المشاركة الخارجية).");
   if(r.status===404)throw new Error("الملف غير موجود أو غير مشارك مع هذا الحساب.");
@@ -241,12 +247,25 @@ async function g(path,opt={}){
 }
 async function wbPath(sup){
   if(ITEMS[sup])return ITEMS[sup];
+  const fixed=(CFG.IDS[sup]||"").trim();
+  if(fixed)return ITEMS[sup]=`/drives/${fixed.split("|")[0]}/items/${fixed.split("|")[1]}/workbook`;
   const link=CFG.FILES[sup]; if(!link||!/^https?:/.test(link))throw new Error(`رابط ملف ${sup} غير مضاف بالكود.`);
   const c=JSON.parse(LS.get("rc_item_"+sup)||"null"); if(c&&c.link===link)return ITEMS[sup]=c.p;
   const id="u!"+btoa(unescape(encodeURIComponent(link))).replace(/=+$/,"").replace(/\//g,"_").replace(/\+/g,"-");
-  const it=await g(`/shares/${id}/driveItem?$select=id,parentReference`);
+  const it=await g(`/shares/${id}/driveItem?$select=id,parentReference`,{headers:{Prefer:"redeemSharingLinkIfNecessary"}});
   const p=`/drives/${it.parentReference.driveId}/items/${it.id}/workbook`;
-  LS.set("rc_item_"+sup,JSON.stringify({link,p})); return ITEMS[sup]=p;
+  LS.set("rc_item_"+sup,JSON.stringify({link,p,ids:it.parentReference.driveId+"|"+it.id})); return ITEMS[sup]=p;
+}
+async function showIds(){
+  const out=[];
+  for(const s of SUPS){
+    try{
+      const link=CFG.FILES[s], id="u!"+btoa(unescape(encodeURIComponent(link))).replace(/=+$/,"").replace(/\//g,"_").replace(/\+/g,"-");
+      const it=await g(`/shares/${id}/driveItem?$select=id,parentReference`);
+      out.push(`${s}: ${it.parentReference.driveId}|${it.id}`);
+    }catch(e){out.push(`${s}: خطأ — ${e.message}`)}
+  }
+  $("idsOut").value=out.join("\n"); $("idsOut").classList.remove("hidden");
 }
 const ws=async(sup,n)=>`${await wbPath(sup)}/worksheets/${encodeURIComponent(n)}`;
 const rng=async(sup,n,a)=>`${await ws(sup,n)}/range(address='${a}')`;
@@ -279,7 +298,7 @@ const sDate=x=>{const d=new Date(EPOCH+x*864e5);return `${String(d.getUTCDate())
 const nowHK=()=>(Date.now()-EPOCH)/864e5+8/24;
 
 /* ═════════════ قراءة الوصل ═════════════ */
-const PROMPT=`This image is a QNET purchase confirmation receipt in Arabic. Return ONLY a JSON object (no markdown, no commentary) with these keys:
+const PROMPT=`This file is a QNET purchase confirmation receipt in Arabic. Return ONLY a JSON object (no markdown, no commentary) with these keys:
 "rep_id": value of "رقم هوية الممثل المستقل",
 "order_no": value of "رقم الطلب",
 "customer_name": value of "اسم العميل" exactly as written in Arabic,
@@ -290,16 +309,26 @@ const PROMPT=`This image is a QNET purchase confirmation receipt in Arabic. Retu
 "bv_points": array of numbers from the "النقاط المضافة" column of the "توزيع النقاط" table.
 Use null for anything not found. Read digits carefully.`;
 function shrink(file){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{const m=1800,k=Math.min(1,m/Math.max(img.width,img.height));const c=document.createElement("canvas");c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);c.getContext("2d").drawImage(img,0,0,c.width,c.height);res(c.toDataURL("image/jpeg",0.92))};img.onerror=()=>rej(new Error("تعذر فتح الصورة"));img.src=URL.createObjectURL(file)})}
+const isPdf=f=>f&&(f.type==="application/pdf"||/\.pdf$/i.test(f.name||""));
+function fileB64(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(",")[1]);r.onerror=()=>rej(new Error("تعذر قراءة الملف"));r.readAsDataURL(file)})}
 async function readReceipt(file){
   const key=LS.get("rc_key"); if(!key){$("setBox").open=true;throw new Error("مفتاح Claude غير مضاف. افتح الإعدادات بالباسورد وأضفه.")}
-  const url=await shrink(file); $("prev").src=url; $("prev").classList.remove("hidden");
+  let block;
+  if(isPdf(file)){
+    if(file.size>30*1024*1024)throw new Error("ملف PDF كبير جداً (الحد 30 ميغا).");
+    $("prev").classList.add("hidden"); $("pdfName").textContent="📄 "+(file.name||"وصل.pdf"); $("pdfName").classList.remove("hidden");
+    block={type:"document",source:{type:"base64",media_type:"application/pdf",data:await fileB64(file)}};
+  }else{
+    const url=await shrink(file); $("pdfName").classList.add("hidden"); $("prev").src=url; $("prev").classList.remove("hidden");
+    block={type:"image",source:{type:"base64",media_type:"image/jpeg",data:url.split(",")[1]}};
+  }
   msg("جاري قراءة الوصل...");
   const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"content-type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-    body:JSON.stringify({model:LS.get("rc_model")||CFG.defModel,max_tokens:1024,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:url.split(",")[1]}},{type:"text",text:PROMPT}]}]})});
+    body:JSON.stringify({model:LS.get("rc_model")||CFG.defModel,max_tokens:1024,messages:[{role:"user",content:[block,{type:"text",text:PROMPT}]}]})});
   const j=await r.json(); if(!r.ok)throw new Error("Claude: "+((j.error&&j.error.message)||r.status));
-  const t=j.content.filter(c=>c.type==="text").map(c=>c.text).join(""); const s=t.indexOf("{"),e=t.lastIndexOf("}");
-  if(s<0)throw new Error("ما گدرت أقرأ الوصل، جرّب صورة أوضح.");
-  return JSON.parse(t.slice(s,e+1));
+  const t=j.content.filter(c=>c.type==="text").map(c=>c.text).join(""); const a=t.indexOf("{"),e=t.lastIndexOf("}");
+  if(a<0)throw new Error("ما گدرت أقرأ الوصل، جرّب ملف أوضح.");
+  return JSON.parse(t.slice(a,e+1));
 }
 const norm=s=>String(s??"").replace(/[أإآ]/g,"ا").replace(/ة/g,"ه").replace(/ى/g,"ي").replace(/ـ/g,"").replace(/\s+/g," ").trim();
 const ALIAS={"ذي قار":"الناصرية","ميسان":"العمارة","واسط":"الكوت","المثنى":"السماوة","الانبار":"الرمادي","صلاح الدين":"تكريت","ديالى":"بعقوبة","نينوى":"الموصل","القادسية":"الديوانية"};
@@ -387,7 +416,7 @@ function reset(){
   ["fName","fId","fPhone","fBV","fEc","fDate","fOrder","fPaid","fNote"].forEach(id=>$(id).value="");
   $("fCity").value="";$("fUp").value="";$("fAddr").textContent="";
   document.querySelectorAll(".yn").forEach(b=>b.querySelector('.seg button[data-v="0"]').click());
-  $("formCard").classList.add("hidden");$("prev").classList.add("hidden");$("file").value="";msg("");
+  $("formCard").classList.add("hidden");$("prev").classList.add("hidden");$("pdfName").classList.add("hidden");$("file").value="";msg("");
 }
 
 /* ═════════════ التقرير الأسبوعي ═════════════ */
@@ -549,7 +578,7 @@ async function savePdf(){
 
 /* ═════════════ الواجهة ═════════════ */
 async function onFile(f){
-  if(!f||!f.type.startsWith("image/"))return msg("اختر ملف صورة.","bad");
+  if(!f||!(f.type.startsWith("image/")||isPdf(f)))return msg("اختر صورة أو ملف PDF.","bad");
   if(!CUR)return msg("اختر المورد أولاً.","bad");
   if(!SETS[CUR]){try{await useSupplier(CUR)}catch(e){return msg(e.message,"bad")}}
   try{showData(await readReceipt(f))}catch(e){msg(e.message,"bad")}
@@ -560,14 +589,16 @@ $("file").onchange=e=>onFile(e.target.files[0]);
 dz.ondragover=e=>{e.preventDefault();dz.classList.add("over")};
 dz.ondragleave=()=>dz.classList.remove("over");
 dz.ondrop=e=>{e.preventDefault();dz.classList.remove("over");onFile(e.dataTransfer.files[0])};
-document.addEventListener("paste",e=>{if($("tabUp").classList.contains("hidden"))return;const it=[...((e.clipboardData||{}).items||[])].find(i=>i.type.startsWith("image/"));if(it)onFile(it.getAsFile())});
+document.addEventListener("paste",e=>{if($("tabUp").classList.contains("hidden"))return;const it=[...((e.clipboardData||{}).items||[])].find(i=>i.type.startsWith("image/")||i.type==="application/pdf");if(it)onFile(it.getAsFile())});
 $("btnSave").onclick=save; $("btnReset").onclick=reset;
 $("btnLogin").onclick=()=>{if(LS.get("rc_tok")){LS.del("rc_tok");location.reload()}else login()};
 $("btnUnlock").onclick=async()=>{
   if(await sha256hex($("sPw").value)!==CFG.SET_HASH){$("sPw").value="";return msg("باسورد الإعدادات غير صحيح.","bad")}
   $("sPw").value=""; $("lockArea").classList.add("hidden"); $("setArea").classList.remove("hidden");
   $("sKey").value=LS.get("rc_key")||""; $("sModel").value=LS.get("rc_model")||CFG.defModel;
+  $("btnIds").classList.toggle("hidden",ROLE!=="*");
 };
+$("btnIds").onclick=()=>showIds().catch(e=>msg(e.message,"bad"));
 $("btnSaveSet").onclick=()=>{
   LS.set("rc_key",$("sKey").value.trim()); LS.set("rc_model",$("sModel").value.trim()||CFG.defModel);
   $("sKey").value=""; $("setArea").classList.add("hidden"); $("lockArea").classList.remove("hidden"); $("setBox").open=false;
