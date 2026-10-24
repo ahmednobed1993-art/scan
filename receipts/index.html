@@ -233,7 +233,8 @@ async function g(path,opt={}){
   const at=await token(); if(!at)throw new Error("سجّل الدخول أولاً.");
   const r=await fetch("https://graph.microsoft.com/v1.0"+path,{...opt,headers:{Authorization:"Bearer "+at,"Content-Type":"application/json"}});
   if(r.status===401){LS.del("rc_tok");throw new Error("انتهت الجلسة، سجّل الدخول مرة ثانية.")}
-  if(r.status===403)throw new Error("ليس لديك صلاحية على هذا الملف، أو الخلايا مقفولة.");
+  if(r.status===403)throw new Error("ليس لديك صلاحية على هذا الملف (تأكد من مشاركته مع إيميلك وتفعيل المشاركة الخارجية).");
+  if(r.status===404)throw new Error("الملف غير موجود أو غير مشارك مع هذا الحساب.");
   const j=r.status===204?{}:await r.json().catch(()=>({}));
   if(!r.ok)throw new Error((j.error&&j.error.message)||("Graph "+r.status));
   return j;
@@ -263,8 +264,8 @@ async function useSupplier(sup){
   CUR=sup; LS.set("rc_cur",sup);
   document.querySelectorAll("#supSeg button").forEach(b=>b.classList.toggle("on",b.dataset.s===sup));
   $("supFixed").textContent=ROLE==="*"?"":sup;
-  msg("جاري تحميل قوائم "+sup+"...");
-  const S=await loadSettings(sup,true);
+  msg("جاري فتح ملف "+sup+"...");
+  let S; try{S=await loadSettings(sup,true)}catch(e){delete SETS[sup];throw new Error("تعذر فتح ملف "+sup+": "+e.message)}
   fill("fCity",S.city,true); fill("fStat",S.stat,false); fill("fUp",S.ups.map(u=>u.s),true);
   msg("جاهز. ارفع صورة وصل لـ "+sup+".","ok");
 }
@@ -549,7 +550,8 @@ async function savePdf(){
 /* ═════════════ الواجهة ═════════════ */
 async function onFile(f){
   if(!f||!f.type.startsWith("image/"))return msg("اختر ملف صورة.","bad");
-  if(!CUR||!SETS[CUR])return msg("اختر المورد أولاً.","bad");
+  if(!CUR)return msg("اختر المورد أولاً.","bad");
+  if(!SETS[CUR]){try{await useSupplier(CUR)}catch(e){return msg(e.message,"bad")}}
   try{showData(await readReceipt(f))}catch(e){msg(e.message,"bad")}
 }
 const dz=$("drop");
@@ -599,12 +601,12 @@ async function init(){
   if(ROLE==="*"){
     $("supSeg").innerHTML=""; SUPS.forEach(s=>{const b=document.createElement("button");b.textContent=s;b.dataset.s=s;b.onclick=()=>useSupplier(s).catch(e=>msg(e.message,"bad"));$("supSeg").appendChild(b)});
     $("repSup").innerHTML=""; SUPS.forEach(s=>$("repSup").add(new Option(s,s))); $("repSup").add(new Option("الاثنين سوا","__all"));
-    const last=LS.get("rc_cur"); try{await useSupplier(SUPS.includes(last)?last:SUPS[0])}catch(e){msg(e.message,"bad")}
+    const last=LS.get("rc_cur"); try{await useSupplier(SUPS.includes(last)?last:SUPS[0])}catch(e){return msg(e.message,"bad")}
   }else{
     $("supSeg").classList.add("hidden"); $("repSupWrap").classList.add("hidden");
-    try{await useSupplier(ROLE)}catch(e){msg(e.message,"bad")}
+    try{await useSupplier(ROLE)}catch(e){return msg(e.message,"bad")}
   }
-  if(!LS.get("rc_key"))msg("مفتاح Claude غير مضاف على هذا الجهاز. افتح «الإعدادات» بالباسورد وأضفه.","info");
+  if(!LS.get("rc_key"))msg("تم فتح ملف "+CUR+" ✔ — لكن مفتاح Claude غير مضاف على هذا الجهاز. افتح «الإعدادات» بالباسورد وأضفه.","info");
 }
 (async()=>{try{await handleRedirect()}catch(e){msg(e.message,"bad")}await init()})();
 </script>
