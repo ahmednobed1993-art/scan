@@ -182,8 +182,8 @@ const CFG = {
   setSheet : "الإعدادات",
   range    : "A1:J1501",
   suppliers: [
-    {name:"مرتضى", url:"https://achievers544-my.sharepoint.com/:x:/g/personal/ahmednajim_achievers544_onmicrosoft_com/IQDvBvVdW1KqSptZfDhy26qlAc1_IpJmXk1D5NdGyf2Ksbg?e=DsLoWr"},
-    {name:"عقيل",  url:"https://achievers544-my.sharepoint.com/:x:/g/personal/ahmednajim_achievers544_onmicrosoft_com/IQBEewHSUIETR4NHmKO170EQAZxOAAuh200uFJjLLJvcOsA?e=OLRnWe"}
+    {name:"مرتضى", ids:"b!gQS0yhr2v0yZvnl-LXvVhZtiGK9FCi1FrMAaLa0fcY7abwiqdIldSoIH4LGwqFMY|01LF7K6QHPA32V2W2SVJFJWWL4HBZNXKVF", url:"https://achievers544-my.sharepoint.com/:x:/g/personal/ahmednajim_achievers544_onmicrosoft_com/IQDvBvVdW1KqSptZfDhy26qlAc1_IpJmXk1D5NdGyf2Ksbg?e=DsLoWr"},
+    {name:"عقيل",  ids:"b!gQS0yhr2v0yZvnl-LXvVhZtiGK9FCi1FrMAaLa0fcY7abwiqdIldSoIH4LGwqFMY|01LF7K6QCEPMA5EUEBCNDYGR4YUO266QIQ", url:"https://achievers544-my.sharepoint.com/:x:/g/personal/ahmednajim_achievers544_onmicrosoft_com/IQBEewHSUIETR4NHmKO170EQAZxOAAuh200uFJjLLJvcOsA?e=OLRnWe"}
   ]
 };
 const GRAPH="https://graph.microsoft.com/v1.0";
@@ -255,7 +255,7 @@ async function api(path,opt={}){
   if(!r.ok){
     const m=j.error?.message||r.statusText;
     if(r.status===401){S.t=null;throw new Error("انتهت الجلسة — سجّل الدخول من جديد")}
-    if(r.status===403)throw new Error("الكتابة مرفوضة — تأكد أن لديك صلاحية تعديل على ملف هذا المورد.");
+    if(r.status===403)throw new Error("مرفوض — ليس لديك صلاحية على ملف هذا المورد.");
     throw new Error(m);
   }
   return j;
@@ -271,7 +271,8 @@ function shareId(url){
 }
 async function openFile(sup){
   if(!/^https?:/.test(sup.url))throw new Error("رابط ملف "+sup.name+" غير مضاف بالكود.");
-  const d=await api(`/shares/${shareId(sup.url)}/driveItem`);
+  if(sup.ids&&sup.ids.includes("|")){const [driveId,itemId]=sup.ids.split("|");return {driveId,itemId,name:sup.name}}
+  const d=await api(`/shares/${shareId(sup.url)}/driveItem`,{headers:{Prefer:"redeemSharingLinkIfNecessary"}});
   return {driveId:d.parentReference.driveId,itemId:d.id,name:d.name};
 }
 const WB=()=>`/drives/${FILE.driveId}/items/${FILE.itemId}/workbook`;
