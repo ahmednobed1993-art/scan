@@ -257,15 +257,16 @@ async function wbPath(sup){
   LS.set("rc_item_"+sup,JSON.stringify({link,p,ids:it.parentReference.driveId+"|"+it.id})); return ITEMS[sup]=p;
 }
 async function showIds(){
+  $("idsOut").value="جاري البحث في OneDrive..."; $("idsOut").classList.remove("hidden");
+  const r=await g(`/me/drive/root/search(q='${encodeURIComponent("مبيعات")}')?$select=name,id,parentReference,webUrl&$top=200`);
+  const files=(r.value||[]).filter(x=>/\.xlsx$/i.test(x.name||""));
   const out=[];
   for(const s of SUPS){
-    try{
-      const link=CFG.FILES[s], id="u!"+btoa(unescape(encodeURIComponent(link))).replace(/=+$/,"").replace(/\//g,"_").replace(/\+/g,"-");
-      const it=await g(`/shares/${id}/driveItem?$select=id,parentReference`);
-      out.push(`${s}: ${it.parentReference.driveId}|${it.id}`);
-    }catch(e){out.push(`${s}: خطأ — ${e.message}`)}
+    const hit=files.filter(x=>x.name.includes(s));
+    if(!hit.length)out.push(`${s}: لم يتم العثور على ملف باسم يحتوي «${s}»`);
+    else hit.forEach(x=>out.push(`${s}: ${x.parentReference.driveId}|${x.id}   (${x.name})`));
   }
-  $("idsOut").value=out.join("\n"); $("idsOut").classList.remove("hidden");
+  $("idsOut").value=out.join("\n");
 }
 const ws=async(sup,n)=>`${await wbPath(sup)}/worksheets/${encodeURIComponent(n)}`;
 const rng=async(sup,n,a)=>`${await ws(sup,n)}/range(address='${a}')`;
